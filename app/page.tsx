@@ -48,12 +48,24 @@ function formatDateTime(dueDate: string): string {
   });
 }
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  const output = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    output[i] = rawData.charCodeAt(i);
+  }
+  return output;
+}
+
 export default function Dashboard() {
   const supabase = createClient();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
   const [newTask, setNewTask] = useState<NewTask>({
     title: "",
     course_name: "",
@@ -80,6 +92,15 @@ export default function Dashboard() {
     };
     init();
     setIsDark(document.documentElement.classList.contains("dark"));
+
+    // Service Worker 登録
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+    // 通知許可状態を取得
+    if ("Notification" in window) {
+      setNotifPermission(Notification.permission);
+    }
   }, [supabase, loadTasks]);
 
   const toggleDark = () => {
@@ -88,6 +109,35 @@ export default function Dashboard() {
     const next = html.classList.contains("dark");
     setIsDark(next);
     localStorage.setItem("theme", next ? "dark" : "light");
+  };
+
+  const enableNotifications = async () => {
+    if (!("Notification" in window) || !("serviceWorker" in navigator)) return;
+    const permission = await Notification.requestPermission();
+    setNotifPermission(permission);
+    if (permission !== "granted") return;
+
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const existing = await reg.pushManager.getSubscription();
+      if (existing) await existing.unsubscribe();
+
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) return;
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+
+      await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(sub),
+      });
+    } catch (err) {
+      console.error("Push subscription failed:", err);
+    }
   };
 
   const addTask = async () => {
@@ -123,17 +173,11 @@ export default function Dashboard() {
   const now = new Date();
   const todayStr = now.toDateString();
 
-  const overdueTasks = tasks.filter(
-    (t) => !t.is_completed && new Date(t.due_date) < now && new Date(t.due_date).toDateString() !== todayStr
-  );
-  const todayTasks = tasks.filter(
-    (t) => !t.is_completed && new Date(t.due_date).toDateString() === todayStr
-  );
-  const upcomingTasks = tasks.filter(
-    (t) => !t.is_completed && new Date(t.due_date) > now && new Date(t.due_date).toDateString() !== todayStr
-  );
+  const overdueTasks  = tasks.filter((t) => !t.is_completed && new Date(t.due_date) < now && new Date(t.due_date).toDateString() !== todayStr);
+  const todayTasks    = tasks.filter((t) => !t.is_completed && new Date(t.due_date).toDateString() === todayStr);
+  const upcomingTasks = tasks.filter((t) => !t.is_completed && new Date(t.due_date) > now && new Date(t.due_date).toDateString() !== todayStr);
   const completedTasks = tasks.filter((t) => t.is_completed);
-  const urgentCount = overdueTasks.length + todayTasks.length;
+  const urgentCount   = overdueTasks.length + todayTasks.length;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -148,6 +192,18 @@ export default function Dashboard() {
             )}
           </div>
           <div className="flex items-center gap-1">
+            {notifPermission !== "granted" && notifPermission !== "denied" && (
+              <button
+                onClick={enableNotifications}
+                className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+                title="リマインド通知を有効にする"
+              >
+                🔔 通知ON
+              </button>
+            )}
+            {notifPermission === "granted" && (
+              <span className="text-xs text-emerald-500 dark:text-emerald-400 px-1">🔔</span>
+            )}
             <button
               onClick={toggleDark}
               className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
