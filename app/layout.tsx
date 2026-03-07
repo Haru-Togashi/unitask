@@ -10,12 +10,19 @@ const geist = Geist({
 export const metadata: Metadata = {
   title: "UniTask - 単位を守る、大学生のタスク管理",
   description: "出席コードや課題提出の期限を管理して、単位の取りこぼしを防ぐWebアプリ",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "UniTask",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({
@@ -26,6 +33,8 @@ export default function RootLayout({
   return (
     <html lang="ja" suppressHydrationWarning>
       <head>
+        <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -39,7 +48,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${geist.variable} antialiased`}>{children}</body>
+      <body className={geist.variable + " antialiased"}>{children}</body>
     </html>
   );
 }
