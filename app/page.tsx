@@ -66,6 +66,7 @@ export default function Dashboard() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>("default");
+  const [notifSupported, setNotifSupported] = useState(false);
   const [newTask, setNewTask] = useState<NewTask>({
     title: "",
     course_name: "",
@@ -93,12 +94,14 @@ export default function Dashboard() {
     init();
     setIsDark(document.documentElement.classList.contains("dark"));
 
-    // Service Worker 登録
-    if ("serviceWorker" in navigator) {
+    // Service Worker 登録 + 通知サポート確認
+    const supported =
+      "serviceWorker" in navigator &&
+      "Notification" in window &&
+      "PushManager" in window;
+    setNotifSupported(supported);
+    if (supported) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
-    }
-    // 通知許可状態を取得
-    if ("Notification" in window) {
       setNotifPermission(Notification.permission);
     }
   }, [supabase, loadTasks]);
@@ -192,7 +195,7 @@ export default function Dashboard() {
             )}
           </div>
           <div className="flex items-center gap-1">
-            {notifPermission !== "granted" && notifPermission !== "denied" && (
+            {notifSupported && notifPermission !== "granted" && (
               <button
                 onClick={enableNotifications}
                 className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
@@ -201,8 +204,8 @@ export default function Dashboard() {
                 🔔 通知ON
               </button>
             )}
-            {notifPermission === "granted" && (
-              <span className="text-xs text-emerald-500 dark:text-emerald-400 px-1">🔔</span>
+            {notifSupported && notifPermission === "granted" && (
+              <span className="text-xs text-emerald-500 dark:text-emerald-400 px-1" title="通知が有効です">🔔✓</span>
             )}
             <button
               onClick={toggleDark}
