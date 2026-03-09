@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { webpush } from "@/lib/webpush";
+import { getWebPush } from "@/lib/webpush";
 import type { PushSubscriptionJSON } from "@/lib/webpush";
 
 // 特定ユーザーまたは全ユーザーへの通知送信 API
@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: 0 });
   }
 
+  const webpush = getWebPush();
   const payload = JSON.stringify({ title, body, url });
   const staleEndpoints: string[] = [];
   let sent = 0;

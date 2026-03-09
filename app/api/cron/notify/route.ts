@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { webpush } from "@/lib/webpush";
+import { getWebPush } from "@/lib/webpush";
 import type { PushSubscriptionJSON } from "@/lib/webpush";
 
 // Vercel Cron から呼ばれるエンドポイント。CRON_SECRET で保護。
@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     subs.map((s: { user_id: string; subscription: PushSubscriptionJSON }) => [s.user_id, s.subscription])
   );
 
-  // 通知送信
+  const webpush = getWebPush();
   let sent = 0;
   const staleEndpoints: string[] = [];
 
