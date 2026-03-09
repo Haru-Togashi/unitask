@@ -195,18 +195,12 @@ export default function Dashboard() {
             )}
           </div>
           <div className="flex items-center gap-1">
-            {notifPermission !== "granted" && (
-              <button
-                onClick={enableNotifications}
-                className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-                title="リマインド通知を有効にする"
-              >
-                🔔 通知ON
-              </button>
-            )}
-            {notifPermission === "granted" && (
-              <span className="text-xs text-emerald-500 dark:text-emerald-400 px-1" title="通知が有効です">🔔✓</span>
-            )}
+            <button
+              onClick={enableNotifications}
+              className="text-sm px-2 py-1 bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 rounded-lg"
+            >
+              🔔 通知ON
+            </button>
             <button
               onClick={toggleDark}
               className="w-9 h-9 flex items-center justify-center rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
