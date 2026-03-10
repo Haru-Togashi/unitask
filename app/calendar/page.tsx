@@ -34,7 +34,6 @@ function formatDateTime(dueDate: string): string {
 }
 
 export default function CalendarPage() {
-  const supabase = createClient();
   const [tasks, setTasks] = useState<Task[]>([]);
   const today = new Date();
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
@@ -42,21 +41,23 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const loadTasks = useCallback(async () => {
+    const supabase = createClient();
     const { data } = await supabase
       .from("tasks")
       .select("*")
       .order("due_date", { ascending: true });
     if (data) setTasks(data);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
+    const supabase = createClient();
     const init = async () => {
       const { data } = await supabase.auth.getUser();
       if (!data.user) { window.location.href = "/login"; return; }
       loadTasks();
     };
     init();
-  }, [supabase, loadTasks]);
+  }, [loadTasks]);
 
   const prevMonth = () => {
     if (currentMonth === 0) { setCurrentYear(y => y - 1); setCurrentMonth(11); }

@@ -54,22 +54,23 @@ function calcEarnedCredits(courses: Course[], simulateFail?: string): number {
 }
 
 export default function GpaPage() {
-  const supabase = createClient();
   const [courses, setCourses] = useState<Course[]>([]);
   const [requiredCredits, setRequiredCredits] = useState(124);
   const [reqInput, setReqInput] = useState("124");
   const [simulateFail, setSimulateFail] = useState<string | null>(null);
 
   const loadCourses = useCallback(async () => {
+    const supabase = createClient();
     const { data } = await supabase
       .from("courses")
       .select("id, name, credits, grade")
       .order("day_of_week")
       .order("period");
     if (data) setCourses(data);
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
+    const supabase = createClient();
     const init = async () => {
       const { data } = await supabase.auth.getUser();
       if (!data.user) { window.location.href = "/login"; return; }
@@ -81,7 +82,7 @@ export default function GpaPage() {
       setRequiredCredits(Number(stored));
       setReqInput(stored);
     }
-  }, [supabase, loadCourses]);
+  }, [loadCourses]);
 
   const currentGPA = calcGPA(courses);
   const earnedCredits = calcEarnedCredits(courses);
