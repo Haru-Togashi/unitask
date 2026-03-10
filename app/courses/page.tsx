@@ -11,6 +11,17 @@ type Course = {
   room: string | null;
   teacher: string | null;
   max_absences: number;
+  credits: number;
+  grade: string | null;
+};
+
+type Task = {
+  id: string;
+  title: string;
+  course_id: string | null;
+  due_date: string;
+  task_type: "assignment" | "attendance" | "exam";
+  is_completed: boolean;
 };
 
 type Attendance = {
@@ -27,10 +38,13 @@ type CourseForm = {
   room: string;
   teacher: string;
   max_absences: number;
+  credits: number;
+  grade: string;
 };
 
 const DAYS = ["月", "火", "水", "木", "金"];
 const PERIODS = [1, 2, 3, 4, 5, 6];
+const GRADES = ["S", "A", "B", "C", "D"];
 
 const CELL_COLORS = [
   "bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100",
@@ -47,7 +61,7 @@ const BAR_COLORS = [
   "bg-pink-400",  "bg-teal-400",   "bg-yellow-400", "bg-red-400",
 ];
 
-const EMPTY_FORM: CourseForm = { name: "", day_of_week: 0, period: 1, room: "", teacher: "", max_absences: 5 };
+const EMPTY_FORM: CourseForm = { name: "", day_of_week: 0, period: 1, room: "", teacher: "", max_absences: 5, credits: 2, grade: "" };
 
 const STATUS_LABEL: Record<string, string> = { present: "出席", absent: "欠席", late: "遅刻" };
 const STATUS_COLOR: Record<string, string> = {
@@ -56,9 +70,16 @@ const STATUS_COLOR: Record<string, string> = {
   late:    "text-orange-600 dark:text-orange-400",
 };
 
+const TYPE_LABEL: Record<string, string> = {
+  assignment: "課題",
+  attendance: "出席",
+  exam: "テスト",
+};
+
 export default function CoursesPage() {
   const supabase = createClient();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [attendances, setAttendances] = useState<Attendance[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
@@ -74,6 +95,14 @@ export default function CoursesPage() {
     if (data) setCourses(data);
   }, [supabase]);
 
+  const loadTasks = useCallback(async () => {
+    const { data } = await supabase
+      .from("tasks")
+      .select("id, title, course_id, due_date, task_type, is_completed")
+      .order("due_date", { ascending: true });
+    if (data) setTasks(data);
+  }, [supabase]);
+
   const loadAttendances = useCallback(async () => {
     const { data } = await supabase
       .from("attendances")
@@ -87,10 +116,11 @@ export default function CoursesPage() {
       const { data } = await supabase.auth.getUser();
       if (!data.user) { window.location.href = "/login"; return; }
       loadCourses();
+      loadTasks();
       loadAttendances();
     };
     init();
-  }, [supabase, loadCourses, loadAttendances]);
+  }, [supabase, loadCourses, loadTasks, loadAttendances]);
 
   const openAddForm = (day?: number, period?: number) => {
     setForm({ ...EMPTY_FORM, day_of_week: day ?? 0, period: period ?? 1 });
@@ -106,6 +136,8 @@ export default function CoursesPage() {
       room: course.room ?? "",
       teacher: course.teacher ?? "",
       max_absences: course.max_absences,
+      credits: course.credits ?? 2,
+      grade: course.grade ?? "",
     });
     setEditingCourse(course);
     setSelectedCourse(null);
@@ -123,6 +155,8 @@ export default function CoursesPage() {
       room: form.room || null,
       teacher: form.teacher || null,
       max_absences: form.max_absences,
+      credits: form.credits,
+      grade: form.grade || null,
     };
     if (editingCourse) {
       await supabase.from("courses").update(payload).eq("id", editingCourse.id);
@@ -160,7 +194,6 @@ export default function CoursesPage() {
     loadAttendances();
   };
 
-  // ── Helpers ──────────────────────────────────────────────────
   const getCourseColor = (course: Course) => CELL_COLORS[courses.indexOf(course) % CELL_COLORS.length];
   const getBarColor   = (course: Course) => BAR_COLORS[courses.indexOf(course) % BAR_COLORS.length];
   const getCourseAt   = (day: number, p: number) => courses.find(c => c.day_of_week === day && c.period === p);
@@ -169,27 +202,33 @@ export default function CoursesPage() {
     const today = new Date().toISOString().split("T")[0];
     return attendances.find(a => a.course_id === cid && a.date === today);
   };
-  const todayDow = new Date().getDay() - 1; // 0=Mon…4=Fri, -1=Sun, 5=Sat
+  const todayDow = new Date().getDay() - 1;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
 
-      {/* ── Header ───────────────────────────────────────────── */}
       <header className="fixed top-0 left-0 right-0 z-40 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">授業管理</h1>
-          <button
-            onClick={() => openAddForm()}
-            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors"
-          >
-            + 授業を追加
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href="/gpa"
+              className="text-sm px-3 py-1.5 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+            >
+              GPA計算
+            </a>
+            <button
+              onClick={() => openAddForm()}
+              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors"
+            >
+              + 授業を追加
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="pt-14 pb-24 max-w-2xl mx-auto">
 
-        {/* ── Timetable ────────────────────────────────────────── */}
         <div className="bg-white dark:bg-gray-900 mx-4 mt-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 p-3">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">時間割</h2>
           <div className="overflow-x-auto">
@@ -254,7 +293,6 @@ export default function CoursesPage() {
           </div>
         </div>
 
-        {/* ── Course List ──────────────────────────────────────── */}
         <section className="px-4 mt-5 space-y-3 pb-2">
           <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">授業一覧</h2>
 
@@ -282,11 +320,8 @@ export default function CoursesPage() {
                 key={course.id}
                 className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden"
               >
-                {/* Color stripe */}
                 <div className={["h-1", topColor].join(" ")} />
-
                 <div className="p-4">
-                  {/* Course header */}
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0 pr-2">
                       <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{course.name}</p>
@@ -294,6 +329,8 @@ export default function CoursesPage() {
                         {DAYS[course.day_of_week]}曜{course.period}限
                         {course.room    ? "　•　" + course.room    : ""}
                         {course.teacher ? "　•　" + course.teacher : ""}
+                        {"　•　" + (course.credits ?? 2) + "単位"}
+                        {course.grade ? "　•　" + course.grade : ""}
                       </p>
                     </div>
                     <button
@@ -304,7 +341,6 @@ export default function CoursesPage() {
                     </button>
                   </div>
 
-                  {/* Absence bar */}
                   <div className="mt-1">
                     <div className="flex justify-between text-xs mb-1">
                       <span className="text-gray-400 dark:text-gray-500">欠席 {absentCount}/{course.max_absences}回</span>
@@ -320,7 +356,6 @@ export default function CoursesPage() {
                     </div>
                   </div>
 
-                  {/* Quick attendance */}
                   <div className="mt-3 flex items-center gap-2 flex-wrap">
                     <span className="text-xs text-gray-400 dark:text-gray-500 mr-0.5">今日:</span>
                     {(["present", "absent", "late"] as const).map(s => {
@@ -354,7 +389,6 @@ export default function CoursesPage() {
         </section>
       </main>
 
-      {/* ── Add / Edit Form Bottom Sheet ─────────────────────── */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div
@@ -377,7 +411,6 @@ export default function CoursesPage() {
                 autoFocus
               />
 
-              {/* Day selector */}
               <div>
                 <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">曜日</label>
                 <div className="grid grid-cols-5 gap-2">
@@ -398,7 +431,6 @@ export default function CoursesPage() {
                 </div>
               </div>
 
-              {/* Period selector */}
               <div>
                 <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">時限</label>
                 <div className="grid grid-cols-6 gap-2">
@@ -434,7 +466,6 @@ export default function CoursesPage() {
                 className="w-full h-12 px-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
               />
 
-              {/* Max absences slider */}
               <div>
                 <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">
                   最大欠席可能回数:{" "}
@@ -453,6 +484,55 @@ export default function CoursesPage() {
                 </div>
               </div>
 
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">
+                  単位数:{" "}
+                  <span className="font-bold text-gray-900 dark:text-gray-100">{form.credits}単位</span>
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="8"
+                  value={form.credits}
+                  onChange={e => setForm({ ...form, credits: Number(e.target.value) })}
+                  className="w-full accent-blue-500"
+                />
+                <div className="flex justify-between text-xs text-gray-400 mt-1">
+                  <span>1単位</span><span>8単位</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">成績</label>
+                <div className="flex gap-2 flex-wrap">
+                  {GRADES.map(g => (
+                    <button
+                      key={g}
+                      onClick={() => setForm({ ...form, grade: form.grade === g ? "" : g })}
+                      className={[
+                        "w-12 h-11 rounded-xl text-sm font-bold border-2 transition-colors",
+                        form.grade === g
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                          : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400",
+                      ].join(" ")}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setForm({ ...form, grade: "" })}
+                    className={[
+                      "px-3 h-11 rounded-xl text-sm border-2 transition-colors",
+                      form.grade === ""
+                        ? "border-gray-500 bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                        : "border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500",
+                    ].join(" ")}
+                  >
+                    未評価
+                  </button>
+                </div>
+              </div>
+
               <button
                 onClick={saveCourse}
                 disabled={!form.name}
@@ -465,17 +545,15 @@ export default function CoursesPage() {
         </div>
       )}
 
-      {/* ── Course Detail Bottom Sheet ───────────────────────── */}
       {selectedCourse && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div
             className="absolute inset-0 bg-black/40 dark:bg-black/60"
             onClick={() => setSelectedCourse(null)}
           />
-          <div className="relative bg-white dark:bg-gray-900 rounded-t-2xl max-w-2xl w-full mx-auto p-6 pb-10 max-h-[80vh] overflow-y-auto shadow-xl">
+          <div className="relative bg-white dark:bg-gray-900 rounded-t-2xl max-w-2xl w-full mx-auto p-6 pb-10 max-h-[85vh] overflow-y-auto shadow-xl">
             <div className="w-10 h-1 bg-gray-200 dark:bg-gray-700 rounded-full mx-auto mb-5" />
 
-            {/* Detail header */}
             <div className="flex items-start justify-between mb-1">
               <div className="flex-1 min-w-0 pr-2">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{selectedCourse.name}</h2>
@@ -483,6 +561,10 @@ export default function CoursesPage() {
                   {DAYS[selectedCourse.day_of_week]}曜{selectedCourse.period}限
                   {selectedCourse.room    ? "　•　" + selectedCourse.room    : ""}
                   {selectedCourse.teacher ? "　•　" + selectedCourse.teacher : ""}
+                </p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                  {(selectedCourse.credits ?? 2) + "単位"}
+                  {selectedCourse.grade ? "　•　成績: " + selectedCourse.grade : "　•　未評価"}
                 </p>
               </div>
               <div className="flex gap-2 flex-shrink-0">
@@ -501,7 +583,6 @@ export default function CoursesPage() {
               </div>
             </div>
 
-            {/* Absence summary card */}
             {(() => {
               const absent    = getAbsentCount(selectedCourse.id);
               const remaining = selectedCourse.max_absences - absent;
@@ -539,7 +620,41 @@ export default function CoursesPage() {
               );
             })()}
 
-            {/* Attendance history */}
+            {/* Linked Tasks */}
+            {(() => {
+              const linked = tasks.filter(t => t.course_id === selectedCourse.id);
+              if (linked.length === 0) return null;
+              return (
+                <div className="mt-5">
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">関連タスク</h3>
+                  <div className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+                    {linked.map((t, idx) => (
+                      <div
+                        key={t.id}
+                        className={[
+                          "flex justify-between items-center px-4 py-2.5 text-sm",
+                          idx !== 0 ? "border-t border-gray-100 dark:border-gray-800" : "",
+                          t.is_completed ? "opacity-50" : "",
+                        ].join(" ")}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className={["text-sm font-medium truncate", t.is_completed ? "line-through text-gray-400" : "text-gray-800 dark:text-gray-200"].join(" ")}>
+                            {t.title}
+                          </p>
+                          <p className="text-xs text-gray-400 dark:text-gray-500">
+                            {new Date(t.due_date).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric", weekday: "short" })}
+                          </p>
+                        </div>
+                        <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
+                          {TYPE_LABEL[t.task_type] || t.task_type}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mt-5 mb-2">出席記録</h3>
             {(() => {
               const courseAtts = attendances.filter(a => a.course_id === selectedCourse.id);
@@ -574,7 +689,7 @@ export default function CoursesPage() {
   );
 }
 
-function BottomNav({ active }: { active: "dashboard" | "courses" }) {
+function BottomNav({ active }: { active: "dashboard" | "calendar" | "courses" }) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
       <div className="max-w-2xl mx-auto flex h-16">
@@ -589,6 +704,18 @@ function BottomNav({ active }: { active: "dashboard" | "courses" }) {
         >
           <span className="text-xl">🏠</span>
           <span>ダッシュボード</span>
+        </a>
+        <a
+          href="/calendar"
+          className={[
+            "flex-1 flex flex-col items-center justify-center gap-0.5 text-xs transition-colors",
+            active === "calendar"
+              ? "text-blue-600 dark:text-blue-400"
+              : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300",
+          ].join(" ")}
+        >
+          <span className="text-xl">📅</span>
+          <span>カレンダー</span>
         </a>
         <a
           href="/courses"
